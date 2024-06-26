@@ -3,30 +3,34 @@ import fs from "fs";
 import path from "path";
 
 import { Movie } from "../types/movie";
-import { generatePDFForAll, generatePDFForOne } from "../utils/pdfHelper";
+import { generatePDFForAll, generatePDFForOne, createPDFAndSendResponse } from "../utils/pdfHelper";
 import { movieService } from "../services/movieService";
 
 const moviesRouter = Router();
-const PARENT_DIR = path.resolve(__dirname, "..");
+const PUBLIC_DIR = path.resolve(__dirname, "..", "public", "pdf");
 
 moviesRouter.get("/", async (req: Request, res: Response, next: NextFunction) => {
   try {
+    /* fetch movies from TMDB API */
     const movies: Movie[] = await movieService.getAll();
 
-    const moviesPDFFilename: string = `${PARENT_DIR}/public/pdf/TMDB_Popular_Movies.pdf`;
+    /* generate PDF file */
+    const moviesPDFFilename: string = path.join(PUBLIC_DIR, "TMDB_Popular_Movies.pdf");
     const writeStream: fs.WriteStream = fs.createWriteStream(moviesPDFFilename);
-
     generatePDFForAll(writeStream, movies);
 
+    /* save and display PDF file */
     writeStream.on("finish", () => {
-      const readStream: fs.ReadStream = fs.createReadStream(moviesPDFFilename);
-      const filenameForDownload: string = encodeURIComponent(moviesPDFFilename);
-
-      res.setHeader("Content-disposition", `inline; filename="${filenameForDownload}"`);
-      res.setHeader("Content-type", "application/pdf");
-
-      readStream.pipe(res);
+      console.log("Saved PDF file:", moviesPDFFilename);
+      createPDFAndSendResponse(res, moviesPDFFilename);
     });
+
+    /* handle errors */
+    writeStream.on("error", (err) => {
+      console.error("Error accurred while writing PDF file:", err);
+      next(err);
+    });
+
   } catch (err) {
     next(err);
   }
@@ -34,21 +38,26 @@ moviesRouter.get("/", async (req: Request, res: Response, next: NextFunction) =>
 
 moviesRouter.get("/:id", async (req: Request, res: Response, next: NextFunction) => {
   try {
+    /* fetch movie by ID from TMDB API */
     const movie: Movie = await movieService.getOne(req.params.id);
 
-    const moviePDFFilename: string = `${PARENT_DIR}/public/pdf/${movie.title.replace(" ", "_")}.pdf`;
+    /* generate PDF file */
+    const moviePDFFilename: string = path.join(PUBLIC_DIR, `${movie.title.replaceAll(" ", "_")}.pdf`);
     const writeStream: fs.WriteStream = fs.createWriteStream(moviePDFFilename);
     generatePDFForOne(writeStream, movie);
 
+    /* save and display PDF file */
     writeStream.on("finish", () => {
-      const stream: fs.ReadStream = fs.createReadStream(moviePDFFilename);
-      const filenameForDownload: string = encodeURIComponent(moviePDFFilename);
-
-      res.setHeader("Content-disposition", `inline; filename="${filenameForDownload}"`);
-      res.setHeader("Content-type", "application/pdf");
-
-      stream.pipe(res);
+      console.log("Saved PDF file:", moviePDFFilename);
+      createPDFAndSendResponse(res, moviePDFFilename);
     });
+
+    /* handle errors */
+    writeStream.on("error", (err) => {
+      console.error("Error accurred while writing PDF file:", err);
+      next(err);
+    });
+  
   } catch (err) {
     next(err);
   }
